@@ -1,0 +1,53 @@
+{
+  "@@locale": "en",
+
+  "phaseReady": "READY",
+  "phaseGetReady": "GET READY",
+  "phaseFight": "FIGHT",
+  "phaseRest": "REST",
+  "phaseDone": "DONE",
+
+  "roundCounter": "ROUND  {current} / {total}",
+  "@roundCounter": {
+    "placeholders": {
+      "current": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+
+  "settingsTooltip": "Settings",
+  "settingsTitle": "Settings",
+  "buttonDone": "DONE",
+
+  "sectionPresets": "Presets",
+  "sectionRounds": "Rounds",
+  "sectionDurations": "Durations",
+  "sectionAudio": "Audio",
+  "sectionDevice": "Device",
+
+  "numberOfRounds": "Number of rounds",
+  "roundDuration": "Round duration",
+  "restDuration": "Rest duration",
+  "prepDuration": "Get-ready (prep)",
+  "warningLead": "Warning lead",
+  "volume": "Volume",
+  "mute": "Mute",
+  "countdownBeeps": "Countdown beeps (last 3s)",
+  "keepScreenAwake": "Keep screen awake",
+  "hapticFeedback": "Haptic feedback",
+
+  "saveAsPreset": "Save current as preset",
+  "presetName": "Preset name",
+  "presetNameHint": "e.g. My Bag Work",
+  "cancel": "Cancel",
+  "save": "Save",
+
+  "reset": "Reset",
+  "start": "Start",
+  "pause": "Pause",
+  "resume": "Resume",
+  "skip": "Skip",
+
+  "language": "Language",
+  "languageSystem": "System"
+}

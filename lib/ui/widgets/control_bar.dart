@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../models/workout_phase.dart';
 
 class ControlBar extends StatelessWidget {
@@ -23,6 +24,7 @@ class ControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final bool isIdle =
         phase == WorkoutPhase.idle || phase == WorkoutPhase.finished;
 
@@ -34,7 +36,7 @@ class ControlBar extends StatelessWidget {
           if (!isIdle) ...[
             _BigButton(
               icon: Icons.refresh_rounded,
-              label: 'Reset',
+              label: l10n.reset,
               color: Colors.white24,
               onTap: onReset,
             ),
@@ -44,8 +46,8 @@ class ControlBar extends StatelessWidget {
                 ? Icons.play_arrow_rounded
                 : (isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded),
             label: isIdle
-                ? 'Start'
-                : (isRunning ? 'Pause' : 'Resume'),
+                ? l10n.start
+                : (isRunning ? l10n.pause : l10n.resume),
             color: Colors.white,
             textColor: Colors.black,
             onTap: isIdle
@@ -56,7 +58,7 @@ class ControlBar extends StatelessWidget {
           if (!isIdle) ...[
             _BigButton(
               icon: Icons.skip_next_rounded,
-              label: 'Skip',
+              label: l10n.skip,
               color: Colors.white24,
               onTap: onSkip,
             ),

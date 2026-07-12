@@ -3,21 +3,6 @@ import 'package:flutter/material.dart';
 enum WorkoutPhase { idle, prep, round, rest, finished }
 
 extension WorkoutPhaseX on WorkoutPhase {
-  String get label {
-    switch (this) {
-      case WorkoutPhase.idle:
-        return 'READY';
-      case WorkoutPhase.prep:
-        return 'GET READY';
-      case WorkoutPhase.round:
-        return 'FIGHT';
-      case WorkoutPhase.rest:
-        return 'REST';
-      case WorkoutPhase.finished:
-        return 'DONE';
-    }
-  }
-
   Color get color {
     switch (this) {
       case WorkoutPhase.idle:

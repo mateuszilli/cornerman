@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import '../l10n/app_localizations.dart';
 import '../models/workout_phase.dart';
 import '../state/timer_notifier.dart';
 import 'config_screen.dart';
@@ -23,6 +24,7 @@ class HomeScreen extends ConsumerWidget {
       WakelockPlus.disable();
     }
 
+    final l10n = AppLocalizations.of(context)!;
     final phaseColor = s.phase.color;
     final isWarning = s.isWarning;
 
@@ -35,6 +37,7 @@ class HomeScreen extends ConsumerWidget {
               phase: s.phase,
               currentRound: s.currentRound,
               totalRounds: s.config.rounds,
+              l10n: l10n,
               onSettings: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const ConfigScreen()),
               ),
@@ -65,7 +68,7 @@ class HomeScreen extends ConsumerWidget {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                s.phase.label,
+                                _phaseLabel(l10n, s.phase),
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 20,
@@ -98,16 +101,27 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
+String _phaseLabel(AppLocalizations l10n, WorkoutPhase phase) =>
+    switch (phase) {
+      WorkoutPhase.idle => l10n.phaseReady,
+      WorkoutPhase.prep => l10n.phaseGetReady,
+      WorkoutPhase.round => l10n.phaseFight,
+      WorkoutPhase.rest => l10n.phaseRest,
+      WorkoutPhase.finished => l10n.phaseDone,
+    };
+
 class _TopBar extends StatelessWidget {
   final WorkoutPhase phase;
   final int currentRound;
   final int totalRounds;
+  final AppLocalizations l10n;
   final VoidCallback onSettings;
 
   const _TopBar({
     required this.phase,
     required this.currentRound,
     required this.totalRounds,
+    required this.l10n,
     required this.onSettings,
   });
 
@@ -124,7 +138,7 @@ class _TopBar extends StatelessWidget {
         children: [
           if (showRound)
             Text(
-              'ROUND  $currentRound / $totalRounds',
+              l10n.roundCounter(currentRound, totalRounds),
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 22,
@@ -136,7 +150,7 @@ class _TopBar extends StatelessWidget {
             const SizedBox(),
           IconButton(
             icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 28),
-            tooltip: 'Settings',
+            tooltip: l10n.settingsTooltip,
             onPressed: onSettings,
           ),
         ],

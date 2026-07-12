@@ -1,0 +1,47 @@
+{
+  "@@locale": "pt",
+
+  "phaseReady": "PRONTO",
+  "phaseGetReady": "PREPARE-SE",
+  "phaseFight": "LUTA",
+  "phaseRest": "DESCANSO",
+  "phaseDone": "FIM",
+
+  "roundCounter": "ROUND  {current} / {total}",
+
+  "settingsTooltip": "Configurações",
+  "settingsTitle": "Configurações",
+  "buttonDone": "PRONTO",
+
+  "sectionPresets": "Predefinições",
+  "sectionRounds": "Rounds",
+  "sectionDurations": "Durações",
+  "sectionAudio": "Áudio",
+  "sectionDevice": "Dispositivo",
+
+  "numberOfRounds": "Número de rounds",
+  "roundDuration": "Duração do round",
+  "restDuration": "Duração do descanso",
+  "prepDuration": "Preparação",
+  "warningLead": "Aviso prévio",
+  "volume": "Volume",
+  "mute": "Silenciar",
+  "countdownBeeps": "Bipes de contagem regressiva (últimos 3s)",
+  "keepScreenAwake": "Manter tela ativa",
+  "hapticFeedback": "Vibração",
+
+  "saveAsPreset": "Guardar como predefinição",
+  "presetName": "Nome da predefinição",
+  "presetNameHint": "ex. Meu Saco",
+  "cancel": "Cancelar",
+  "save": "Guardar",
+
+  "reset": "Reiniciar",
+  "start": "Iniciar",
+  "pause": "Pausar",
+  "resume": "Retomar",
+  "skip": "Pular",
+
+  "language": "Idioma",
+  "languageSystem": "Sistema"
+}

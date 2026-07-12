@@ -8,6 +8,7 @@ final prefsServiceProvider = Provider<PrefsService>((ref) => PrefsService());
 class PrefsService {
   static const _kConfig = 'last_config';
   static const _kUserPresets = 'user_presets';
+  static const _kLocale = 'locale';
 
   Future<TimerConfig?> loadLastConfig() async {
     final prefs = await SharedPreferences.getInstance();
@@ -43,5 +44,19 @@ class PrefsService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
         _kUserPresets, jsonEncode(presets.map((p) => p.toJson()).toList()));
+  }
+
+  Future<String?> loadLocale() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kLocale);
+  }
+
+  Future<void> saveLocale(String? code) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (code == null) {
+      await prefs.remove(_kLocale);
+    } else {
+      await prefs.setString(_kLocale, code);
+    }
   }
 }

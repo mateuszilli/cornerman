@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../l10n/app_localizations.dart';
 import '../models/timer_config.dart';
 import '../services/audio_service.dart';
 import '../services/prefs_service.dart';
+import '../state/locale_notifier.dart';
 import '../state/timer_notifier.dart';
 
 class ConfigScreen extends ConsumerStatefulWidget {
@@ -53,19 +55,20 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Scaffold(
       backgroundColor: const Color(0xFF121212),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Settings',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
+        title: Text(l10n.settingsTitle,
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800)),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
           TextButton(
             onPressed: _applyAndPop,
-            child: const Text('DONE',
-                style: TextStyle(
+            child: Text(l10n.buttonDone,
+                style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w900,
                     fontSize: 16)),
@@ -75,7 +78,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         children: [
-          _Section('Presets', children: [
+          _Section(l10n.sectionPresets, children: [
             _PresetGrid(
               builtins: TimerConfig.builtinPresets,
               userPresets: _userPresets,
@@ -87,24 +90,24 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
             OutlinedButton.icon(
               onPressed: _saveAsPreset,
               icon: const Icon(Icons.save_alt_rounded, color: Colors.white70),
-              label: const Text('Save current as preset',
-                  style: TextStyle(color: Colors.white70)),
+              label: Text(l10n.saveAsPreset,
+                  style: const TextStyle(color: Colors.white70)),
               style: OutlinedButton.styleFrom(
                   side: const BorderSide(color: Colors.white24)),
             ),
           ]),
-          _Section('Rounds', children: [
+          _Section(l10n.sectionRounds, children: [
             _Stepper(
-              label: 'Number of rounds',
+              label: l10n.numberOfRounds,
               value: _cfg.rounds,
               min: 1,
               max: 20,
               onChanged: (v) => setState(() => _cfg = _cfg.copyWith(rounds: v)),
             ),
           ]),
-          _Section('Durations', children: [
+          _Section(l10n.sectionDurations, children: [
             _TimeStepper(
-              label: 'Round duration',
+              label: l10n.roundDuration,
               totalSeconds: _cfg.roundSeconds,
               min: 30,
               max: 600,
@@ -113,7 +116,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
                   setState(() => _cfg = _cfg.copyWith(roundSeconds: v)),
             ),
             _TimeStepper(
-              label: 'Rest duration',
+              label: l10n.restDuration,
               totalSeconds: _cfg.restSeconds,
               min: 0,
               max: 300,
@@ -122,7 +125,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
                   setState(() => _cfg = _cfg.copyWith(restSeconds: v)),
             ),
             _TimeStepper(
-              label: 'Get-ready (prep)',
+              label: l10n.prepDuration,
               totalSeconds: _cfg.prepSeconds,
               min: 0,
               max: 60,
@@ -131,7 +134,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
                   setState(() => _cfg = _cfg.copyWith(prepSeconds: v)),
             ),
             _TimeStepper(
-              label: 'Warning lead',
+              label: l10n.warningLead,
               totalSeconds: _cfg.warningSeconds,
               min: 5,
               max: 30,
@@ -140,9 +143,9 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
                   setState(() => _cfg = _cfg.copyWith(warningSeconds: v)),
             ),
           ]),
-          _Section('Audio', children: [
+          _Section(l10n.sectionAudio, children: [
             _SliderRow(
-              label: 'Volume',
+              label: l10n.volume,
               value: _cfg.volume,
               onChanged: (v) {
                 setState(() => _cfg = _cfg.copyWith(volume: v));
@@ -150,7 +153,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
               },
             ),
             _Toggle(
-              label: 'Mute',
+              label: l10n.mute,
               value: _cfg.muted,
               onChanged: (v) {
                 setState(() => _cfg = _cfg.copyWith(muted: v));
@@ -158,25 +161,26 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
               },
             ),
             _Toggle(
-              label: 'Countdown beeps (last 3s)',
+              label: l10n.countdownBeeps,
               value: _cfg.countdownBeeps,
               onChanged: (v) =>
                   setState(() => _cfg = _cfg.copyWith(countdownBeeps: v)),
             ),
           ]),
-          _Section('Device', children: [
+          _Section(l10n.sectionDevice, children: [
             _Toggle(
-              label: 'Keep screen awake',
+              label: l10n.keepScreenAwake,
               value: _cfg.keepScreenAwake,
               onChanged: (v) =>
                   setState(() => _cfg = _cfg.copyWith(keepScreenAwake: v)),
             ),
             _Toggle(
-              label: 'Haptic feedback',
+              label: l10n.hapticFeedback,
               value: _cfg.haptics,
               onChanged: (v) =>
                   setState(() => _cfg = _cfg.copyWith(haptics: v)),
             ),
+            _LanguagePicker(systemLabel: l10n.languageSystem),
           ]),
           const SizedBox(height: 40),
         ],
@@ -188,31 +192,31 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 Future<String?> _promptName(BuildContext context) async {
+  final l10n = AppLocalizations.of(context)!;
   final ctrl = TextEditingController();
   return showDialog<String>(
     context: context,
     builder: (ctx) => AlertDialog(
       backgroundColor: const Color(0xFF1E1E1E),
-      title:
-          const Text('Preset name', style: TextStyle(color: Colors.white)),
+      title: Text(l10n.presetName, style: const TextStyle(color: Colors.white)),
       content: TextField(
         controller: ctrl,
         autofocus: true,
         style: const TextStyle(color: Colors.white),
-        decoration: const InputDecoration(
-          hintText: 'e.g. My Bag Work',
-          hintStyle: TextStyle(color: Colors.white38),
+        decoration: InputDecoration(
+          hintText: l10n.presetNameHint,
+          hintStyle: const TextStyle(color: Colors.white38),
           enabledBorder:
-              UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+              const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
         ),
       ),
       actions: [
         TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel')),
+            child: Text(l10n.cancel)),
         TextButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save')),
+            child: Text(l10n.save)),
       ],
     ),
   );
@@ -443,6 +447,70 @@ class _Row extends StatelessWidget {
           ),
           trailing,
         ],
+      ),
+    );
+  }
+}
+
+// ── language picker ────────────────────────────────────────────────────────
+
+class _LanguagePicker extends ConsumerWidget {
+  final String systemLabel;
+  const _LanguagePicker({required this.systemLabel});
+
+  static const _options = [
+    (code: null, label: ''),      // placeholder; label filled at runtime
+    (code: 'en', label: 'English'),
+    (code: 'es', label: 'Español'),
+    (code: 'pt', label: 'Português'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final currentCode = ref.watch(localeProvider)?.languageCode;
+
+    String labelFor(String? code) =>
+        code == null ? systemLabel : _options.firstWhere((o) => o.code == code).label;
+
+    return _Row(
+      label: l10n.language,
+      trailing: PopupMenuButton<String?>(
+        initialValue: currentCode,
+        onSelected: (code) => ref.read(localeProvider.notifier).setLocale(code),
+        color: const Color(0xFF2A2A2A),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        itemBuilder: (_) => [
+          _menuItem(null, systemLabel, currentCode),
+          _menuItem('en', 'English', currentCode),
+          _menuItem('es', 'Español', currentCode),
+          _menuItem('pt', 'Português', currentCode),
+        ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              labelFor(currentCode),
+              style: const TextStyle(color: Colors.white70, fontSize: 14),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.arrow_drop_down, color: Colors.white38, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  PopupMenuItem<String?> _menuItem(String? code, String label, String? current) {
+    final selected = code == current;
+    return PopupMenuItem<String?>(
+      value: code,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: selected ? Colors.white : Colors.white70,
+          fontWeight: selected ? FontWeight.w700 : FontWeight.normal,
+        ),
       ),
     );
   }
