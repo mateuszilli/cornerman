@@ -21,7 +21,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
   @override
   void initState() {
     super.initState();
-    _cfg = ref.read(timerProvider).config;
+    _cfg = ref.read(timerProvider).state.config;
     _loadPresets();
   }
 
@@ -32,7 +32,7 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
 
   Future<void> _applyAndPop() async {
     await ref.read(prefsServiceProvider).saveConfig(_cfg);
-    ref.read(timerProvider.notifier).loadConfig(_cfg);
+    ref.read(timerProvider).loadConfig(_cfg);
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -165,6 +165,14 @@ class _ConfigScreenState extends ConsumerState<ConfigScreen> {
               value: _cfg.countdownBeeps,
               onChanged: (v) =>
                   setState(() => _cfg = _cfg.copyWith(countdownBeeps: v)),
+            ),
+            _Toggle(
+              label: l10n.duckAudio,
+              value: _cfg.duckAudio,
+              onChanged: (v) {
+                setState(() => _cfg = _cfg.copyWith(duckAudio: v));
+                ref.read(audioServiceProvider).setDuckAudio(v);
+              },
             ),
           ]),
           _Section(l10n.sectionDevice, children: [

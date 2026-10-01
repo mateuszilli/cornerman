@@ -14,8 +14,8 @@ class HomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final s = ref.watch(timerProvider);
-    final notifier = ref.read(timerProvider.notifier);
+    final notifier = ref.watch(timerProvider);
+    final s = notifier.state;
 
     // Manage wakelock in response to state changes.
     if (s.config.keepScreenAwake && s.isRunning) {
@@ -26,7 +26,6 @@ class HomeScreen extends ConsumerWidget {
 
     final l10n = AppLocalizations.of(context)!;
     final phaseColor = s.phase.color;
-    final isWarning = s.isWarning;
 
     return Scaffold(
       backgroundColor: phaseColor,
@@ -50,35 +49,11 @@ class HomeScreen extends ConsumerWidget {
                     aspectRatio: 1,
                     child: Padding(
                       padding: const EdgeInsets.all(20),
-                      child: ProgressRing(
-                        progress: s.progress,
-                        color: Colors.white,
-                        strokeWidth: 12,
-                        child: Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Padding(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 32),
-                                child: CountdownDisplay(
-                                  remainingMs: s.remainingMs,
-                                  pulsing: isWarning,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                _phaseLabel(l10n, s.phase),
-                                style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: 4,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                      child: _LiveCountdown(
+                        notifier: notifier,
+                        phaseLabel: _phaseLabel(l10n, s.phase),
+                        warningSeconds: s.config.warningSeconds,
+                        isWarningPhase: s.phase == WorkoutPhase.round,
                       ),
                     ),
                   ),
@@ -109,6 +84,72 @@ String _phaseLabel(AppLocalizations l10n, WorkoutPhase phase) =>
       WorkoutPhase.rest => l10n.phaseRest,
       WorkoutPhase.finished => l10n.phaseDone,
     };
+
+/// The only part of the screen that updates on every tick. Listens directly
+/// to [TimerNotifier]'s per-tick `ValueNotifier`s instead of `ref.watch`, so
+/// a tick repaints just the ring (via its own `RepaintBoundary`) and the
+/// digits (only when the displayed second actually changes) — nothing else
+/// in the widget tree rebuilds.
+class _LiveCountdown extends StatelessWidget {
+  final TimerNotifier notifier;
+  final String phaseLabel;
+  final int warningSeconds;
+  final bool isWarningPhase;
+
+  const _LiveCountdown({
+    required this.notifier,
+    required this.phaseLabel,
+    required this.warningSeconds,
+    required this.isWarningPhase,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: notifier.progressNotifier,
+      builder: (context, progress, child) {
+        return RepaintBoundary(
+          child: ProgressRing(
+            progress: progress,
+            color: Colors.white,
+            strokeWidth: 12,
+            child: child!,
+          ),
+        );
+      },
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
+              child: ValueListenableBuilder<int>(
+                valueListenable: notifier.remainingSecondsNotifier,
+                builder: (context, remainingSeconds, _) => CountdownDisplay(
+                  remainingMs: remainingSeconds * 1000,
+                  pulsing: isWarningPhase &&
+                      warningSeconds > 0 &&
+                      remainingSeconds <= warningSeconds &&
+                      remainingSeconds > 0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              phaseLabel,
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 4,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _TopBar extends StatelessWidget {
   final WorkoutPhase phase;

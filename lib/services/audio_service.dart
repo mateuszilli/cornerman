@@ -20,18 +20,20 @@ class AudioService {
     for (final cue in AudioCue.values) {
       _players[cue] = AudioPlayer();
     }
-    _configureAudioContext();
+    _configureAudioContext(duckAudio: true);
   }
 
-  void _configureAudioContext() {
+  void setDuckAudio(bool duckAudio) => _configureAudioContext(duckAudio: duckAudio);
+
+  void _configureAudioContext({required bool duckAudio}) {
     AudioPlayer.global.setAudioContext(
       AudioContext(
         iOS: AudioContextIOS(
           // Plays even when the phone is on silent/vibrate.
           category: AVAudioSessionCategory.playback,
-          options: const {
+          options: {
             AVAudioSessionOptions.mixWithOthers,
-            AVAudioSessionOptions.duckOthers,
+            if (duckAudio) AVAudioSessionOptions.duckOthers,
           },
         ),
         android: const AudioContextAndroid(
@@ -47,12 +49,12 @@ class AudioService {
 
   Future<void> preload() async {
     final Map<AudioCue, String> assets = {
-      AudioCue.preFinish: 'sounds/clapper.mp3',
-      AudioCue.finish: 'sounds/bell.mp3',
-      AudioCue.preStart: 'sounds/clapper.mp3',
-      AudioCue.start: 'sounds/bell.mp3',
-      AudioCue.beep: 'sounds/beep.mp3',
-      AudioCue.end: 'sounds/bell.mp3',
+      AudioCue.preFinish: 'sounds/clapper.wav',
+      AudioCue.finish: 'sounds/bell.wav',
+      AudioCue.preStart: 'sounds/clapper.wav',
+      AudioCue.start: 'sounds/bell.wav',
+      AudioCue.beep: 'sounds/beep.wav',
+      AudioCue.end: 'sounds/bell.wav',
     };
 
     for (final entry in assets.entries) {

@@ -11,6 +11,7 @@ class TimerConfig {
   final bool keepScreenAwake;
   final double volume;
   final bool muted;
+  final bool duckAudio;
 
   const TimerConfig({
     required this.rounds,
@@ -23,6 +24,7 @@ class TimerConfig {
     required this.keepScreenAwake,
     required this.volume,
     required this.muted,
+    required this.duckAudio,
   });
 
   static const TimerConfig championship = TimerConfig(
@@ -36,6 +38,7 @@ class TimerConfig {
     keepScreenAwake: true,
     volume: 1.0,
     muted: false,
+    duckAudio: true,
   );
 
   static const TimerConfig pro = TimerConfig(
@@ -49,6 +52,7 @@ class TimerConfig {
     keepScreenAwake: true,
     volume: 1.0,
     muted: false,
+    duckAudio: true,
   );
 
   static const TimerConfig training = TimerConfig(
@@ -62,6 +66,7 @@ class TimerConfig {
     keepScreenAwake: true,
     volume: 1.0,
     muted: false,
+    duckAudio: true,
   );
 
   static const List<({String name, TimerConfig config})> builtinPresets = [
@@ -81,6 +86,7 @@ class TimerConfig {
     bool? keepScreenAwake,
     double? volume,
     bool? muted,
+    bool? duckAudio,
   }) {
     return TimerConfig(
       rounds: rounds ?? this.rounds,
@@ -93,6 +99,7 @@ class TimerConfig {
       keepScreenAwake: keepScreenAwake ?? this.keepScreenAwake,
       volume: volume ?? this.volume,
       muted: muted ?? this.muted,
+      duckAudio: duckAudio ?? this.duckAudio,
     );
   }
 
@@ -107,6 +114,7 @@ class TimerConfig {
         'keepScreenAwake': keepScreenAwake,
         'volume': volume,
         'muted': muted,
+        'duckAudio': duckAudio,
       };
 
   factory TimerConfig.fromJson(Map<String, dynamic> j) => TimerConfig(
@@ -120,6 +128,8 @@ class TimerConfig {
         keepScreenAwake: j['keepScreenAwake'] as bool,
         volume: (j['volume'] as num).toDouble(),
         muted: j['muted'] as bool,
+        // Absent in configs persisted before this field existed.
+        duckAudio: j['duckAudio'] as bool? ?? true,
       );
 
   String toJsonString() => jsonEncode(toJson());

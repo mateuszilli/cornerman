@@ -27,6 +27,7 @@
   "volume": "Volumen",
   "mute": "Silencio",
   "countdownBeeps": "Pitidos de cuenta atrás (últimos 3s)",
+  "duckAudio": "Bajar la música para las señales",
   "keepScreenAwake": "Mantener pantalla activa",
   "hapticFeedback": "Vibración",
 

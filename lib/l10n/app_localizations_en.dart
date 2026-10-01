@@ -77,6 +77,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get countdownBeeps => 'Countdown beeps (last 3s)';
 
   @override
+  String get duckAudio => 'Duck music for cues';
+
+  @override
   String get keepScreenAwake => 'Keep screen awake';
 
   @override

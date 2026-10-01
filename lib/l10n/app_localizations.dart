@@ -232,6 +232,12 @@ abstract class AppLocalizations {
   /// **'Countdown beeps (last 3s)'**
   String get countdownBeeps;
 
+  /// No description provided for @duckAudio.
+  ///
+  /// In en, this message translates to:
+  /// **'Duck music for cues'**
+  String get duckAudio;
+
   /// No description provided for @keepScreenAwake.
   ///
   /// In en, this message translates to:

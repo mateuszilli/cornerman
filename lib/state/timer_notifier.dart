@@ -1,221 +1,264 @@
 import 'dart:async';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import '../models/timer_config.dart';
 import '../models/workout_phase.dart';
+import '../models/workout_schedule.dart';
+import '../models/workout_snapshot.dart';
+import '../models/workout_state.dart';
 import '../services/audio_service.dart';
+import '../services/background_session_service.dart';
+import '../services/clock_service.dart';
 import '../services/haptic_service.dart';
+import '../services/notification_fallback_service.dart';
 import '../services/prefs_service.dart';
-import 'timer_state.dart';
 
-final timerProvider = NotifierProvider<TimerNotifier, TimerState>(TimerNotifier.new);
+final timerProvider = ChangeNotifierProvider<TimerNotifier>((ref) {
+  final backgroundSession = ref.watch(backgroundSessionServiceProvider);
+  final notifier = TimerNotifier(
+    audioService: ref.watch(audioServiceProvider),
+    hapticService: ref.watch(hapticServiceProvider),
+    prefsService: ref.watch(prefsServiceProvider),
+    backgroundSession: backgroundSession,
+    notificationFallback: ref.watch(notificationFallbackServiceProvider),
+    clock: ref.watch(clockServiceProvider),
+  );
+  // BackgroundSessionService (a constructor dependency of this notifier)
+  // can't take the notifier itself to avoid a construction cycle, so
+  // transport controls (lock screen / notification) are wired here instead.
+  backgroundSession.bind(
+    onPlay: notifier.start,
+    onPause: notifier.pause,
+    onStop: notifier.reset,
+    onSkip: notifier.skipPhase,
+  );
+  return notifier;
+});
 
-class TimerNotifier extends Notifier<TimerState> {
-  late final AudioService audioService;
-  late final HapticService hapticService;
-  late final PrefsService prefsService;
+/// Engine for a workout timer whose only mutable state is [WorkoutState].
+/// The ticker's sole job is to trigger cue playback and a repaint signal —
+/// current phase, round, and remaining time are always derived fresh via
+/// `resolve()`, never accumulated.
+class TimerNotifier extends ChangeNotifier {
+  TimerNotifier({
+    required this.audioService,
+    required this.hapticService,
+    required this.prefsService,
+    required this.backgroundSession,
+    required this.notificationFallback,
+    ClockService? clock,
+  })  : clock = clock ?? ClockService(),
+        _workoutState = WorkoutState.idle(TimerConfig.championship),
+        _schedule = WorkoutSchedule.build(TimerConfig.championship);
 
+  final AudioService audioService;
+  final HapticService hapticService;
+  final PrefsService prefsService;
+  final BackgroundSession backgroundSession;
+  final NotificationFallback notificationFallback;
+  final ClockService clock;
+
+  WorkoutState _workoutState;
+  WorkoutSchedule _schedule;
   Timer? _ticker;
-  DateTime? _phaseDeadline;
+  int _cueCursor = 0;
 
-  // Cue-fire guards — reset each phase so cues fire exactly once.
-  bool _warnFired = false;
-  bool _countdownFired3 = false;
-  bool _countdownFired2 = false;
-  bool _countdownFired1 = false;
+  // Hot-path values, updated every tick. Widgets that only need these
+  // (the digits, the progress ring) listen here directly instead of via
+  // `ref.watch(timerProvider)`, so a tick never rebuilds the rest of the
+  // screen — only `notifyListeners()` (fired solely on coarse transitions
+  // in `_publish`) does that.
+  final ValueNotifier<int> remainingSecondsNotifier = ValueNotifier(0);
+  final ValueNotifier<double> progressNotifier = ValueNotifier(0.0);
 
-  @override
-  TimerState build() {
-    audioService = ref.watch(audioServiceProvider);
-    hapticService = ref.watch(hapticServiceProvider);
-    prefsService = ref.watch(prefsServiceProvider);
-    ref.onDispose(() => _ticker?.cancel());
-    return TimerState.idle(TimerConfig.championship);
+  WorkoutPhase _lastPhase = WorkoutPhase.idle;
+  int _lastRound = 0;
+  bool _lastRunning = false;
+
+  WorkoutSnapshot get state => resolve(_workoutState, _schedule, clock.now());
+
+  /// Updates the hot-path notifiers unconditionally, but only calls
+  /// `notifyListeners()` — and therefore only rebuilds the coarse UI — when
+  /// phase, round, or running state actually changed.
+  void _publish(WorkoutSnapshot snap, {bool forceNotify = false}) {
+    remainingSecondsNotifier.value = snap.remainingSeconds;
+    progressNotifier.value = snap.progress;
+    final coarseChanged = snap.phase != _lastPhase ||
+        snap.currentRound != _lastRound ||
+        snap.isRunning != _lastRunning;
+    if (coarseChanged || forceNotify) {
+      _lastPhase = snap.phase;
+      _lastRound = snap.currentRound;
+      _lastRunning = snap.isRunning;
+      notifyListeners();
+    }
   }
 
   void loadConfig(TimerConfig config) {
     if (state.isRunning) return;
-    state = TimerState.idle(config);
+    _workoutState = WorkoutState.idle(config);
+    _schedule = WorkoutSchedule.build(config);
+    _cueCursor = 0;
+    audioService.setDuckAudio(config.duckAudio);
+    _publish(state, forceNotify: true);
   }
 
   void start() {
-    if (state.isRunning) return;
-    if (state.phase == WorkoutPhase.idle ||
-        state.phase == WorkoutPhase.finished) {
-      _beginPhase(_firstPhase());
-    } else {
-      _resume();
+    final snap = state;
+    if (snap.phase == WorkoutPhase.idle || snap.phase == WorkoutPhase.finished) {
+      _schedule = WorkoutSchedule.build(_workoutState.config);
+      _workoutState = WorkoutState(
+        config: _workoutState.config,
+        startedAt: clock.now(),
+      );
+      _cueCursor = 0;
+      _processCuesUpTo(Duration.zero);
+      _syncTicker();
+      backgroundSession.startSession();
+      notificationFallback.scheduleAll(_workoutState, _schedule);
+      _syncBackground();
+      _publish(state, forceNotify: true);
+    } else if (!snap.isRunning) {
+      resume();
     }
-
   }
 
   void pause() {
     if (!state.isRunning) return;
-    _ticker?.cancel();
-    state = state.copyWith(isRunning: false);
-    // Store remaining time; deadline is invalidated when paused.
-    _phaseDeadline = null;
+    _workoutState = _workoutState.copyWith(pausedAt: clock.now());
+    _syncTicker();
+    // Cues don't move while paused, but their scheduled wall-clock fire
+    // times would — cancel until resume() reschedules from the new anchor.
+    notificationFallback.cancelAll();
+    _syncBackground();
+    _publish(state, forceNotify: true);
   }
 
-  void resume() => _resume();
+  void resume() {
+    final snap = state;
+    if (snap.isRunning ||
+        snap.phase == WorkoutPhase.idle ||
+        snap.phase == WorkoutPhase.finished ||
+        !_workoutState.isPaused) {
+      return;
+    }
+    final now = clock.now();
+    final pausedDuration = now.difference(_workoutState.pausedAt!);
+    _workoutState = _workoutState.copyWith(
+      pausedOffset: _workoutState.pausedOffset + pausedDuration,
+      clearPausedAt: true,
+    );
+    _syncTicker();
+    notificationFallback.scheduleAll(_workoutState, _schedule);
+    _syncBackground();
+    _publish(state, forceNotify: true);
+  }
 
   void reset() {
     _ticker?.cancel();
-    _phaseDeadline = null;
+    _ticker = null;
     audioService.stop();
-    state = TimerState.idle(state.config);
+    _workoutState = WorkoutState.idle(_workoutState.config);
+    _cueCursor = 0;
+    backgroundSession.endSession();
+    notificationFallback.cancelAll();
+    _publish(state, forceNotify: true);
   }
 
   void skipPhase() {
-    if (state.phase == WorkoutPhase.idle ||
-        state.phase == WorkoutPhase.finished) {
+    final snap = state;
+    if (snap.phase == WorkoutPhase.idle || snap.phase == WorkoutPhase.finished) {
       return;
     }
-    _ticker?.cancel();
-    _phaseDeadline = null;
-    _advancePhase();
-  }
 
-  // ── internal ──────────────────────────────────────────────────────────────
+    final now = clock.now();
+    final elapsed = _workoutState.elapsedAt(now);
+    final target = _schedule.spanAt(elapsed).end;
 
-  WorkoutPhase _firstPhase() =>
-      state.config.prepSeconds > 0 ? WorkoutPhase.prep : WorkoutPhase.round;
+    // Silently advance past every cue strictly inside the skipped remainder
+    // — they must never fire — then land exactly on the boundary offset so
+    // whatever cue sits there (finish/start/workoutEnd) fires normally.
+    final cues = _schedule.cues;
+    while (_cueCursor < cues.length && cues[_cueCursor].at < target) {
+      _cueCursor++;
+    }
 
-  void _beginPhase(WorkoutPhase phase, {int? round}) {
-    _resetCueGuards();
-    final cfg = state.config;
-    final r = round ?? (phase == WorkoutPhase.round ? 1 : state.currentRound);
-
-    final int durationMs = switch (phase) {
-      WorkoutPhase.prep => cfg.prepSeconds * 1000,
-      WorkoutPhase.round => cfg.roundSeconds * 1000,
-      WorkoutPhase.rest => cfg.restSeconds * 1000,
-      _ => 0,
-    };
-
-    _phaseDeadline = DateTime.now().add(Duration(milliseconds: durationMs));
-
-    state = state.copyWith(
-      phase: phase,
-      currentRound: r,
-      remainingMs: durationMs,
-      totalPhaseMs: durationMs,
-      isRunning: true,
+    _workoutState = _workoutState.copyWith(
+      skipOffset: _workoutState.skipOffset + (target - elapsed),
     );
 
-    // Fire the transition cues for entering a new phase.
-    if (phase == WorkoutPhase.round) {
-      audioService.play(AudioCue.start);
-      if (cfg.haptics) hapticService.buzz();
+    _processCuesUpTo(target);
+    _syncTicker();
+    notificationFallback.scheduleAll(_workoutState, _schedule);
+    _syncBackground();
+    _publish(state, forceNotify: true);
+  }
+
+  // ── internal ──────────────────────────────────────────────────────────
+
+  void _onTick() {
+    final now = clock.now();
+    final elapsed = _workoutState.elapsedAt(now);
+    final clipped =
+        elapsed > _schedule.totalDuration ? _schedule.totalDuration : elapsed;
+    _processCuesUpTo(clipped);
+    if (clipped >= _schedule.totalDuration) {
+      _syncTicker();
     }
-
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(milliseconds: 100), _tick);
+    _syncBackground();
+    _publish(state);
   }
 
-  void _resume() {
-    if (state.isRunning || state.phase == WorkoutPhase.idle) return;
-    _phaseDeadline =
-        DateTime.now().add(Duration(milliseconds: state.remainingMs));
-    state = state.copyWith(isRunning: true);
-    _ticker?.cancel();
-    _ticker = Timer.periodic(const Duration(milliseconds: 100), _tick);
-  }
+  void _syncBackground() => backgroundSession.syncFromSnapshot(state);
 
-  void _tick(Timer _) {
-    final deadline = _phaseDeadline;
-    if (deadline == null) return;
-
-    final remaining = deadline.difference(DateTime.now()).inMilliseconds;
-    final clipped = remaining.clamp(0, state.totalPhaseMs);
-    final secs = (clipped / 1000).ceil();
-
-    state = state.copyWith(remainingMs: clipped);
-
-    _checkCues(secs);
-
-    if (remaining <= 0) {
-      _ticker?.cancel();
-      _advancePhase();
+  void _processCuesUpTo(Duration to) {
+    final cues = _schedule.cues;
+    while (_cueCursor < cues.length && cues[_cueCursor].at <= to) {
+      _fireCue(cues[_cueCursor]);
+      _cueCursor++;
     }
   }
 
-  void _checkCues(int secs) {
-    final cfg = state.config;
-    final phase = state.phase;
-
-    // Pre-finish warning (round) and pre-start warning (rest/prep).
-    if (!_warnFired && secs == cfg.warningSeconds) {
-      _warnFired = true;
-      if (phase == WorkoutPhase.round) {
-        audioService.play(AudioCue.preFinish);
-        if (cfg.haptics) hapticService.buzz();
-      } else if (phase == WorkoutPhase.rest || phase == WorkoutPhase.prep) {
-        audioService.play(AudioCue.preStart);
-        if (cfg.haptics) hapticService.buzz();
-      }
-    }
-
-    // Last-3 countdown beeps (prep and rest only — heard before round starts).
-    if (cfg.countdownBeeps &&
-        (phase == WorkoutPhase.prep || phase == WorkoutPhase.rest)) {
-      if (!_countdownFired3 && secs == 3) {
-        _countdownFired3 = true;
-        audioService.play(AudioCue.beep);
-      } else if (!_countdownFired2 && secs == 2) {
-        _countdownFired2 = true;
-        audioService.play(AudioCue.beep);
-      } else if (!_countdownFired1 && secs == 1) {
-        _countdownFired1 = true;
-        audioService.play(AudioCue.beep);
-      }
-    }
-  }
-
-  void _advancePhase() {
-    _resetCueGuards();
-    final cfg = state.config;
-    final phase = state.phase;
-    final round = state.currentRound;
-
-    switch (phase) {
-      case WorkoutPhase.prep:
-        _beginPhase(WorkoutPhase.round, round: 1);
-
-      case WorkoutPhase.round:
-        audioService.play(AudioCue.finish);
-        if (cfg.haptics) hapticService.buzz();
-        if (round >= cfg.rounds) {
-          _enterFinished();
-        } else {
-          _beginPhase(WorkoutPhase.rest, round: round);
-        }
-
-      case WorkoutPhase.rest:
-        _beginPhase(WorkoutPhase.round, round: round + 1);
-
-      case WorkoutPhase.idle:
-      case WorkoutPhase.finished:
+  void _fireCue(CueEvent cue) {
+    audioService.play(_audioCueFor(cue.type));
+    if (!_workoutState.config.haptics) return;
+    switch (cue.type) {
+      case CueType.workoutEnd:
+        hapticService.longBuzz();
+      case CueType.beep:
         break;
+      case CueType.preFinish:
+      case CueType.preStart:
+      case CueType.start:
+      case CueType.finish:
+        hapticService.buzz();
     }
   }
 
-  void _enterFinished() {
+  AudioCue _audioCueFor(CueType type) => switch (type) {
+        CueType.preFinish => AudioCue.preFinish,
+        CueType.finish => AudioCue.finish,
+        CueType.preStart => AudioCue.preStart,
+        CueType.start => AudioCue.start,
+        CueType.beep => AudioCue.beep,
+        CueType.workoutEnd => AudioCue.end,
+      };
+
+  void _syncTicker() {
+    final shouldTick = state.isRunning;
+    if (shouldTick && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) => _onTick());
+    } else if (!shouldTick && _ticker != null) {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
     _ticker?.cancel();
-    _phaseDeadline = null;
-    audioService.play(AudioCue.end);
-    if (state.config.haptics) hapticService.longBuzz();
-    state = state.copyWith(
-      phase: WorkoutPhase.finished,
-      isRunning: false,
-      remainingMs: 0,
-    );
+    remainingSecondsNotifier.dispose();
+    progressNotifier.dispose();
+    super.dispose();
   }
-
-  void _resetCueGuards() {
-    _warnFired = false;
-    _countdownFired3 = false;
-    _countdownFired2 = false;
-    _countdownFired1 = false;
-  }
-
 }

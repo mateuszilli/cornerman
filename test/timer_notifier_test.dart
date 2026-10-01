@@ -3,8 +3,13 @@ import 'package:cornerman/models/timer_config.dart';
 import 'package:cornerman/models/workout_phase.dart';
 import 'package:cornerman/state/timer_notifier.dart';
 import 'package:cornerman/services/audio_service.dart';
+import 'package:cornerman/services/background_session_service.dart';
 import 'package:cornerman/services/haptic_service.dart';
+import 'package:cornerman/services/notification_fallback_service.dart';
 import 'package:cornerman/services/prefs_service.dart';
+import 'package:cornerman/models/workout_schedule.dart';
+import 'package:cornerman/models/workout_snapshot.dart';
+import 'package:cornerman/models/workout_state.dart';
 
 // Stub services that record calls without side-effects.
 class FakeAudioService implements AudioService {
@@ -21,6 +26,9 @@ class FakeAudioService implements AudioService {
 
   @override
   void setMuted(bool m) {}
+
+  @override
+  void setDuckAudio(bool duckAudio) {}
 
   @override
   bool get muted => false;
@@ -58,6 +66,31 @@ class FakePrefsService implements PrefsService {
 
   @override
   Future<void> saveUserPresets(List<NamedPreset> presets) async {}
+
+  @override
+  Future<String?> loadLocale() async => null;
+
+  @override
+  Future<void> saveLocale(String? code) async {}
+}
+
+class FakeBackgroundSession implements BackgroundSession {
+  @override
+  Future<void> startSession() async {}
+
+  @override
+  Future<void> endSession() async {}
+
+  @override
+  void syncFromSnapshot(WorkoutSnapshot snapshot) {}
+}
+
+class FakeNotificationFallback implements NotificationFallback {
+  @override
+  Future<void> scheduleAll(WorkoutState state, WorkoutSchedule schedule) async {}
+
+  @override
+  Future<void> cancelAll() async {}
 }
 
 // Creates a notifier wired to fake services using a short config.
@@ -79,6 +112,7 @@ TimerNotifier _makeNotifier({
     keepScreenAwake: false,
     volume: 1.0,
     muted: false,
+    duckAudio: true,
   );
   final audio = FakeAudioService();
   final haptic = FakeHapticService();
@@ -87,6 +121,8 @@ TimerNotifier _makeNotifier({
     audioService: audio,
     hapticService: haptic,
     prefsService: prefs,
+    backgroundSession: FakeBackgroundSession(),
+    notificationFallback: FakeNotificationFallback(),
   );
   n.loadConfig(cfg);
   return n;
@@ -209,12 +245,15 @@ void main() {
         keepScreenAwake: false,
         volume: 1.0,
         muted: false,
+        duckAudio: true,
       );
       final audio = FakeAudioService();
       final n = TimerNotifier(
         audioService: audio,
         hapticService: FakeHapticService(),
         prefsService: FakePrefsService(),
+        backgroundSession: FakeBackgroundSession(),
+        notificationFallback: FakeNotificationFallback(),
       );
       n.loadConfig(cfg);
       n.start(); // enters round 1 → fires AudioCue.start
@@ -234,12 +273,15 @@ void main() {
         keepScreenAwake: false,
         volume: 1.0,
         muted: false,
+        duckAudio: true,
       );
       final audio = FakeAudioService();
       final n = TimerNotifier(
         audioService: audio,
         hapticService: FakeHapticService(),
         prefsService: FakePrefsService(),
+        backgroundSession: FakeBackgroundSession(),
+        notificationFallback: FakeNotificationFallback(),
       );
       n.loadConfig(cfg);
       n.start(); // round 1
@@ -261,12 +303,15 @@ void main() {
         keepScreenAwake: false,
         volume: 1.0,
         muted: false,
+        duckAudio: true,
       );
       final audio = FakeAudioService();
       final n = TimerNotifier(
         audioService: audio,
         hapticService: FakeHapticService(),
         prefsService: FakePrefsService(),
+        backgroundSession: FakeBackgroundSession(),
+        notificationFallback: FakeNotificationFallback(),
       );
       n.loadConfig(cfg);
       n.start(); // round 1 (only round)
@@ -274,6 +319,42 @@ void main() {
       n.skipPhase(); // finishes — fires end + finish
       expect(audio.played, contains(AudioCue.end));
       expect(n.state.phase, WorkoutPhase.finished);
+      n.dispose();
+    });
+  });
+
+  group('TimerNotifier — notifyListeners fires only on coarse change', () {
+    test('ticking within a phase updates the hot-path notifiers but does '
+        'not call notifyListeners; crossing a phase boundary does', () async {
+      final n = _makeNotifier(
+        rounds: 2,
+        roundSeconds: 2,
+        restSeconds: 1,
+        prepSeconds: 0,
+        warningSeconds: 1,
+      );
+      n.start(); // round 1 begins — this itself is a coarse (forced) notify.
+
+      var notifyCount = 0;
+      n.addListener(() => notifyCount++);
+
+      final progressValuesSeen = <double>{};
+      n.progressNotifier.addListener(
+        () => progressValuesSeen.add(n.progressNotifier.value),
+      );
+
+      // Sit well inside round 1 (2s long) — several ticks, no phase change.
+      await Future<void>.delayed(const Duration(milliseconds: 900));
+      expect(notifyCount, 0,
+          reason: 'no phase/round/running transition occurred');
+      expect(progressValuesSeen.length, greaterThan(1),
+          reason: 'progress notifier should still update every tick');
+
+      // Cross into rest — a coarse transition — notifyListeners must fire.
+      await Future<void>.delayed(const Duration(milliseconds: 1300));
+      expect(notifyCount, greaterThan(0));
+      expect(n.state.phase, WorkoutPhase.rest);
+
       n.dispose();
     });
   });

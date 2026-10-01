@@ -77,6 +77,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get countdownBeeps => 'Pitidos de cuenta atrás (últimos 3s)';
 
   @override
+  String get duckAudio => 'Bajar la música para las señales';
+
+  @override
   String get keepScreenAwake => 'Mantener pantalla activa';
 
   @override

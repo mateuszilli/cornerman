@@ -33,6 +33,7 @@
   "volume": "Volume",
   "mute": "Mute",
   "countdownBeeps": "Countdown beeps (last 3s)",
+  "duckAudio": "Duck music for cues",
   "keepScreenAwake": "Keep screen awake",
   "hapticFeedback": "Haptic feedback",
 

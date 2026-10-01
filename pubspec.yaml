@@ -18,17 +18,24 @@ dependencies:
   wakelock_plus: ^1.2.10
   shared_preferences: ^2.3.3
   vibration: ^3.2.0
+  audio_service: ^0.18.19
+  audio_session: ^0.2.4
+  flutter_local_notifications: ^22.1.0
+  timezone: ^0.11.1
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  integration_test:
+    sdk: flutter
 
 flutter:
   generate: true
   uses-material-design: true
 
   assets:
-    - assets/sounds/bell.mp3
-    - assets/sounds/clapper.mp3
-    - assets/sounds/beep.mp3
+    - assets/sounds/bell.wav
+    - assets/sounds/clapper.wav
+    - assets/sounds/beep.wav
+    - assets/sounds/silence.wav
